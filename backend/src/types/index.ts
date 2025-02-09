@@ -14,6 +14,7 @@ export interface Database {
 }
 
 export interface WebhookPayload {
+  webhookURL: string;
   event: 'verification.step' | 'verification.completed' | 'verification.failed';
   verificationId: string;
   timestamp: string;
@@ -25,10 +26,22 @@ export interface WebhookPayload {
   };
 }
 
+export const PROVIDERS = {
+  'chess.com': '7c9303b3-8e1c-405b-b3d7-d9eaf114d2ce',
+  'uber': 'e3e51528-5da9-433c-a266-96716d363012',
+  'amazon': 'f5766218-a1d4-4f53-b32f-4c00efd7f56c',
+  'reddit': 'fdaea3c3-86af-459a-bb21-1b6b90146766',
+  'equinox': 'equinox-provider-id',
+  'healthify.me': 'f109ae82-3546-4536-a41b-64243b838009'
+} as const;
+
+export type Provider = keyof typeof PROVIDERS;
+
 export interface VerificationRequest {
   metadata: {
     email: string;
   };
-  provider: Database['verifications']['provider'];
-  type: Database['verifications']['verification_type'];
+  provider: 'chess.com' | 'uber' | 'amazon' | 'reddit' | 'equinox' | 'healthify.me';
+  type: 'identity' | 'employment' | 'credentials' | 'membership';
+  webhookURL: string;
 } 

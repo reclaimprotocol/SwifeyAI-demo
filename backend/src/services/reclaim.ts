@@ -44,8 +44,6 @@ export class ReclaimService {
       if (!proof) {
         throw new Error('No proof provided');
       }
-      
-      // Use the standalone verifyProof function instead of class method
       return await verifyProof(proof);
     } catch (error) {
       console.error('Error verifying proof:', error);

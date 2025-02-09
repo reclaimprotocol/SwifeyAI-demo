@@ -9,7 +9,8 @@ import {
   List,
   ListItem,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  CircularProgress
 } from '@mui/material';
 import {
   SportsEsports, // for Chess.com
@@ -26,18 +27,9 @@ import './App.css';
 function App() {
   const [url, setUrl] = useState('');
   const [selectedProvider, setSelectedProvider] = useState('');
-  const backendURL = 'http://localhost:3002/verifications/proof'; // Replace with your webhook URL
+  const [isLoading, setIsLoading] = useState(false);
 
-  const providers = {
-    'chess.com': '7c9303b3-8e1c-405b-b3d7-d9eaf114d2ce',
-    'Uber': 'e3e51528-5da9-433c-a266-96716d363012',
-    'Amazon': 'f5766218-a1d4-4f53-b32f-4c00efd7f56c',
-    'Reddit': 'fdaea3c3-86af-459a-bb21-1b6b90146766',
-    'Equinox': 'equinox-provider-id',
-    'healthify.me': 'f109ae82-3546-4536-a41b-64243b838009'
-  };
-
-  const providerIcons = {
+  const availableProviders = {
     'chess.com': <SportsEsports />,
     'Uber': <DirectionsCar />,
     'Amazon': <ShoppingCart />,
@@ -48,27 +40,32 @@ function App() {
 
   async function generateVerificationRequest(provider) {
     setSelectedProvider(provider);
+    setIsLoading(true);
+    // Clear previous QR code when starting new verification
+    setUrl('');
     
     try {
-      // First, initialize verification with the backend
-      const response = await fetch('http://localhost:3002/verifications', {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/reclaim/initialize`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyJ9.WLXxpR08RWvKtIcr6cUkiRY4p_o-fScNUlOqGE-N2UM',
+          'Accept': 'application/json'
         },
         body: JSON.stringify({
           metadata: {
-            email: 'user@example.com' // You might want to make this dynamic
+            email: 'user@example.com'
           },
           provider: provider,
           type: 'identity'
         })
       });
 
-      const data = await response.json();
+      const result = await response.json();
       
-      if (data.nextStep?.type === 'GENERATE_PROOF') {
-        setUrl(data.nextStep.requestUrl);
+      if (result.data.nextStep?.type === 'GENERATE_PROOF') {
+        setUrl(result.data.nextStep.requestUrl);
+        checkProofStatus(result.data.nextStep.statusUrl);
       } else {
         toast.error('Invalid response from server');
       }
@@ -76,29 +73,52 @@ function App() {
     } catch (error) {
       toast.error('Failed to initialize verification');
       console.error(error);
+      setIsLoading(false);
     }
   }
+
+  const checkProofStatus = async (statusUrl) => {
+    try {
+      const response = await fetch(statusUrl);
+      const data = await response.json();
+
+      if (data.session.statusV2 === 'PROOF_SUBMITTED') {
+        setIsLoading(false);
+        toast.success('Proof generated successfully!');
+        return;
+      }
+
+      // Check again after 2 seconds if proof is not yet submitted
+      setTimeout(() => checkProofStatus(statusUrl), 2000);
+    } catch (error) {
+      console.error('Error checking proof status:', error);
+      setIsLoading(false);
+      toast.error('Failed to check proof status');
+    }
+  };
 
   return (
     <Container maxWidth="sm">
       <Box sx={{ py: 4 }}>
-        <Typography variant="h3" component="h1" gutterBottom align="center">
+        <Typography variant="h4" component="h1" gutterBottom align="center">
           Swifey AI Verification Platform
         </Typography>
         
         <List sx={{ mb: 4 }}>
-          {Object.keys(providers).map((provider) => (
+          {Object.keys(availableProviders).map((provider) => (
             <ListItem
               key={provider}
               sx={{
                 mb: 1,
                 bgcolor: 'background.paper',
                 borderRadius: 1,
+                maxWidth: '80%',
+                margin: 'auto',
                 '&:hover': { bgcolor: 'action.hover' }
               }}
             >
               <ListItemIcon>
-                {providerIcons[provider]}
+                {availableProviders[provider]}
               </ListItemIcon>
               <ListItemText primary={provider} />
               <Button
@@ -112,13 +132,25 @@ function App() {
           ))}
         </List>
 
-        {url && (
-          <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
+        {(url || isLoading) && (
+          <Paper elevation={3} sx={{ p: 1, textAlign: 'center' }}>
             <Typography variant="h5" gutterBottom>
-              Scan QR Code to verify your {selectedProvider} account
+              {url ? `Scan QR Code to verify your ${selectedProvider} account` : 'Generating QR Code...'}
             </Typography>
-            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
-              <QRCode value={url} />
+            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center', flexDirection: 'column', alignItems: 'center' }}>
+              {url ? (
+                <QRCode value={url} />
+              ) : (
+                <CircularProgress />
+              )}
+              {isLoading && url && (
+                <Box sx={{ mt: 2 }}>
+                  <CircularProgress />
+                  <Typography sx={{ mt: 1 }}>
+                    Waiting for proof submission...
+                  </Typography>
+                </Box>
+              )}
             </Box>
           </Paper>
         )}
